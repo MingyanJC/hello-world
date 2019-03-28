@@ -1,0 +1,686 @@
+package com.moldyun.cloud.common.util;
+
+
+import com.moldyun.cloud.bms.vo.TPdmFileInfo;
+import com.moldyun.cloud.common.constant.NumberConst;
+import org.apache.commons.lang.StringUtils;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
+
+/**
+ * String 工具类
+ * Created by fei.guo on 2016/12/07.
+ */
+public class StringUtil {
+
+    private static Pattern linePattern = Pattern.compile("_(\\w)");
+    private static Pattern humpPattern = Pattern.compile("[A-Z]");
+
+    // 请使用 queryVO.setValidFlag(ValidFlag.All.getCode()) 代替使用 ALL_VALID_FLAG
+//    public static final List<Integer> ALL_VALID_FLAG = new ArrayList<>(); //validFlag所有值，用来查询已删除的数据
+//    static {
+//        ValidFlag[] validFlags = ValidFlag.values();
+//        for (ValidFlag validFlag : validFlags) {
+//            ALL_VALID_FLAG.add(validFlag.getCode());
+//        }
+//    }
+
+    public static boolean isNullOrEmpty(String object) {
+        return object == null || object.isEmpty() ? true : false;
+    }
+
+    public static boolean isNotNullOrEmpty(String object) {
+        return object == null || object.isEmpty() ? false : true;
+    }
+
+
+    /**
+     * 下划线转驼峰
+     *
+     * @param str
+     * @return
+     */
+    public static String lineToHump(String str) {
+        if (null == str || "".equals(str)) {
+            return str;
+        }
+        str = str.toLowerCase();
+        Matcher matcher = linePattern.matcher(str);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            matcher.appendReplacement(sb, matcher.group(1).toUpperCase());
+        }
+        matcher.appendTail(sb);
+
+        str = sb.toString();
+        str = str.substring(0, 1).toUpperCase() + str.substring(1);
+
+        return str;
+    }
+
+    /**
+     * 下划线从第 beginNum 段开始转驼峰。beginNum为0时，等同于下划线转驼峰<br>
+     * 例如：lineToHumpAndSub("t_comm_notify_rule", 2)  返回：NotifyRule<br>
+     * lineToHumpAndSub("t_comm_notify_rule", 0)  返回：TCommNotifyRule
+     *
+     * @param str
+     * @param beginNum
+     * @return
+     */
+    public static String lineToHump(String str, int beginNum) {
+        StringBuffer ret = new StringBuffer();
+        String[] strArray = str.split("_");
+        int i = 0;
+        for (String s : strArray) {
+            if (i < beginNum) {
+                i++;
+                continue;
+            }
+            ret.append(StringUtil.toUpperCaseFirstOne(s));
+        }
+        return ret.toString();
+    }
+
+    /**
+     * 驼峰转下划线(简单写法)
+     *
+     * @param str
+     * @return
+     */
+    public static String humpToLine(String str) {
+        String ret = str.replaceAll("[A-Z]", "_$0").toLowerCase();
+        ret = ret.substring(1);
+        return ret;
+    }
+
+    /**
+     * 首字母转小写
+     *
+     * @param s
+     * @return
+     */
+    public static String toLowerCaseFirstOne(String s) {
+        if (StringUtils.isBlank(s)) {
+            return s;
+        }
+        if (Character.isLowerCase(s.charAt(0))) {
+            return s;
+        } else {
+            return (new StringBuilder()).append(Character.toLowerCase(s.charAt(0))).append(s.substring(1)).toString();
+        }
+    }
+
+    /**
+     * 首字母转大写
+     *
+     * @param s
+     * @return
+     */
+    public static String toUpperCaseFirstOne(String s) {
+        if (StringUtils.isBlank(s)) {
+            return s;
+        }
+        if (Character.isUpperCase(s.charAt(0))) {
+            return s;
+        } else {
+            return (new StringBuffer()).append(Character.toUpperCase(s.charAt(0))).append(s.substring(1)).toString();
+        }
+    }
+
+    /**
+     * object转String
+     *
+     * @param object
+     * @return
+     */
+    public static String getString(Object object) {
+        return getString(object, "");
+    }
+
+    public static String getStringDefaultNull(Object object) {
+        return getString(object, null);
+    }
+
+    public static String getString(Object object, String defaultValue) {
+        if (null == object) {
+            return defaultValue;
+        }
+        try {
+            return object.toString();
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    public static String getStringNullOrDefined(Object object, String defaultValue) {
+        if (null == object) {
+            return defaultValue;
+        }else if (object.equals("") || object.equals("undefined")){
+            return null;
+        }
+        try {
+            return object.toString();
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+    /**
+     * 获取起始时间
+     *
+     * @param startTimeStr
+     * @return
+     */
+    public static Date getStartTime(String startTimeStr) {
+        if (!isNullOrEmpty(startTimeStr)) {
+            if (startTimeStr != null && startTimeStr.length() == 10) {
+                startTimeStr += " 00:00:00";
+            }
+            if (startTimeStr != null && !"".equals(startTimeStr)) {
+                return DateUtil.strToDate(startTimeStr);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 获取结束时间
+     *
+     * @param endTimeStr
+     * @return
+     */
+    public static Date getEndTimeStr(String endTimeStr) {
+        if (!isNullOrEmpty(endTimeStr)) {
+            if (endTimeStr != null && endTimeStr.length() == 10) {
+                endTimeStr += " 23:59:59";
+            }
+            if (endTimeStr != null && !"".equals(endTimeStr)) {
+                return DateUtil.strToDate(endTimeStr);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * object转Integer
+     *
+     * @param object
+     * @return
+     */
+    public static int getInt(Object object) {
+        return getInt(object, -1);
+    }
+
+    public static int getInt(Object object, int defaultValue) {
+        if (null == object) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(object.toString());
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    public static Integer getInteger(Object object) {
+        return getInteger(object, null);
+    }
+
+    public static Integer getInteger(Object object, Integer defaultValue) {
+        if (null == object) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(object.toString());
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    public static Long getLong(Object object) {
+        return getLong(object, null);
+    }
+
+    public static Long getLong(Object object, Long defaultValue) {
+        if (null == object) {
+            return defaultValue;
+        }
+        try {
+            return Long.parseLong(object.toString());
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    public static BigDecimal stringToBigDecimal(String numStr) {
+        return StringUtil.isNullOrEmpty(numStr) ? null : new BigDecimal(numStr).multiply(new BigDecimal(100)).setScale(2, BigDecimal.ROUND_HALF_UP);
+    }
+
+    public static BigDecimal getBigDecimal(Object object) {
+        return getBigDecimal(object, null);
+    }
+
+    public static BigDecimal getBigDecimal(Object object, BigDecimal defaultValue) {
+        if (null == object) {
+            return defaultValue;
+        }
+        try {
+            BigDecimal ret = null;
+            if (object != null) {
+                if (object instanceof BigDecimal) {
+                    ret = (BigDecimal) object;
+                } else if (object instanceof String) {
+                    ret = new BigDecimal((String) object);
+                } else if (object instanceof BigInteger) {
+                    ret = new BigDecimal((BigInteger) object);
+                } else if (object instanceof Number) {
+                    ret = new BigDecimal(((Number) object).doubleValue());
+                } else {
+                    throw new ClassCastException("Not possible to coerce [" + object + "] from class " + object.getClass() + " into a BigDecimal.");
+                }
+            }
+            return ret;
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    /**
+     * object转Boolean
+     *
+     * @param object
+     * @return
+     */
+    public static boolean getBoolean(Object object) {
+        return getBoolean(object, false);
+    }
+
+    public static boolean getBoolean(Object object, Boolean defaultValue) {
+        if (null == object) {
+            return defaultValue;
+        }
+        try {
+            return Boolean.parseBoolean(object.toString());
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    /**
+     * object转Double
+     *
+     * @param object
+     * @return
+     */
+    public static double getDouble(Object object) {
+        return getDouble(object, 0d);
+    }
+
+    public static double getDouble(Object object, Double defaultValue) {
+        if (null == object) {
+            return defaultValue;
+        }
+        try {
+            return Double.parseDouble(object.toString());
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    public static Double getDouble(Double defaultValue, Object object) {
+        if (null == object) {
+            return defaultValue;
+        }
+        try {
+            return Double.parseDouble(object.toString());
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+
+    public static boolean isNull(Integer objectNum) {
+        return objectNum == null ? true : false;
+    }
+
+    public static boolean isNotNull(Integer objectNum) {
+        return objectNum == null ? false : true;
+    }
+
+    public static boolean isNull(Long objectNum) {
+        return objectNum == null ? true : false;
+    }
+
+    public static boolean isNotNull(Long objectNum) {
+        return objectNum == null ? false : true;
+    }
+
+    public static boolean isNullOrNegative(Integer objectNum) {
+        return objectNum == null || objectNum <= NumberConst.ZERO_INT ? true : false;
+    }
+
+    public static boolean isNullOrNegative(Double objectNum) {
+        return objectNum == null || objectNum <= NumberConst.ZERO_INT ? true : false;
+    }
+
+    public static boolean isNullOrNegative(BigDecimal objectNum) {
+        return objectNum == null || objectNum.compareTo(BigDecimal.ZERO) != NumberConst.ONE_INT ? true : false;
+    }
+
+    public static String contactUrl(String ip, Integer port, String postfix) {
+        return "http://" + ip + ":" + port + "/" + postfix;
+    }
+
+    /**
+     * 将逗号分隔的id转成列表
+     *
+     * @param ids
+     * @return
+     */
+    public static List<Long> idStringToIdList(String ids) {
+        if(StringUtils.isBlank(ids)){
+            return Collections.emptyList();
+        }
+        List<Long> idList = new ArrayList<>();
+        try {
+            String[] idsAry = ids.split(",");
+            for (int i = 0; i < idsAry.length; i++) {
+                if (!"".equals(idsAry[i])) {
+                    idList.add(Long.parseLong(idsAry[i]));
+                }
+            }
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+        return idList;
+    }
+
+    /**
+     * 将逗号分隔的枚举转成Integer列表
+     *
+     * @param ids
+     * @return
+     */
+    public static List<Integer> idStringToIntList(String ids) {
+        List<Integer> idList = new ArrayList<>();
+        try {
+            String[] idsAry = ids.split(",");
+            for (int i = 0; i < idsAry.length; i++) {
+                if (!"".equals(idsAry[i])) {
+                    idList.add(Integer.parseInt(idsAry[i]));
+                }
+            }
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+        return idList;
+    }
+
+    /**
+     * 将逗号分隔的id转成列表
+     *
+     * @param ids
+     * @return
+     */
+    public static Set<Long> idStringToIdSet(String ids) {
+        if(StringUtils.isBlank(ids)){
+            return Collections.emptySet();
+        }
+        Set<Long> idSet = new HashSet<>();
+        try {
+            String[] idsAry = ids.split(",");
+            for (int i = 0; i < idsAry.length; i++) {
+                if (!"".equals(idsAry[i])) {
+                    idSet.add(Long.parseLong(idsAry[i]));
+                }
+            }
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+            return Collections.emptySet();
+        }
+        return idSet;
+    }
+
+    /**
+     * 将逗号分隔符转化成String
+     */
+    public static List<String> idStringToString(String ids){
+        List<String> idList = new ArrayList<>();
+        try {
+            String[] idsAry = ids.split(",");
+            for (int i = 0; i < idsAry.length; i++) {
+                if (!"".equals(idsAry[i])) {
+                    idList.add(idsAry[i]);
+                }
+            }
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+        return idList;
+    }
+    /**
+     * 将逗号分隔的字符串传入
+     *
+     * @param para
+     * @return
+     */
+    public static List<String> stringToIdList(String para, String delimiter) {
+        List<String> paraList = new ArrayList<>();
+        try {
+            String[] parasAry = para.split(delimiter);
+            for (int i = 0; i < parasAry.length; i++) {
+                if (!"".equals(parasAry[i])) {
+                    paraList.add(parasAry[i]);
+                }
+            }
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+        return paraList;
+    }
+
+    /**
+     * 将逗号分隔的Tpye转成列表
+     *
+     * @param tpyes
+     * @return cyb chen.wei 2017/10/19
+     */
+    public static List<Integer> tpyeStringToTpyeList(String tpyes) {
+        List<Integer> idList = new ArrayList<>();
+        if (tpyes == null) {
+            return idList;
+        }
+        try {
+            String[] idsAry = tpyes.split(",");
+            for (int i = 0; i < idsAry.length; i++) {
+                if (!"".equals(idsAry[i])) {
+                    idList.add(Integer.parseInt(idsAry[i]));
+                }
+            }
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+        return idList;
+    }
+
+    /*将时间变成：00:00*/
+    public static String fromtHM(int time) {
+        if (time == 0) {
+            return "00";
+        } else {
+            if (time >= 10) {
+                return time + "";
+            } else {
+                return "0" + time;
+            }
+        }
+    }
+
+    /**
+     * 获取路径中，文件服务器的group,  fastdfs存储的文件路径格式为 group1/M00/00/00/wKgBYlmBNU-AT4OAAAAZUTU5NC8131.jpg，不是以“/"开始
+     * ftp方式都是以“/”方式开始，通过这个特点，来区分文件存储方式，如果是ftp，没有group的概念，直接返回空就可以
+     *
+     * @param dfsUrl
+     * @return
+     */
+    public static String getDfsUrlGroup(TPdmFileInfo tPdmFileInfo) {
+        return getDfsUrlGroup(StringUtil.isNullOrEmpty(tPdmFileInfo.getDfsUrl()) ? tPdmFileInfo.getFtpUrl() : tPdmFileInfo.getDfsUrl());
+    }
+
+    @Deprecated
+    public static String getDfsUrlGroup(String dfsUrl) {
+        if (StringUtils.isNotBlank(dfsUrl)) {
+            if (dfsUrl.indexOf("/") > 0) {
+                return dfsUrl.substring(0, dfsUrl.indexOf("/"));
+            } else {
+                return "";
+            }
+        }
+        return "";
+    }
+
+    /**
+     * 获取路径中，文件服务器的地址 fastdfs存储的文件路径格式为 group1/M00/00/00/wKgBYlmBNU-AT4OAAAAZUTU5NC8131.jpg，不是以“/"开始
+     * ftp方式都是以“/”方式开始，通过这个特点，来区分文件存储方式，如果是ftp，没有group的概念，直接返回
+     *
+     * @param dfsUrl
+     * @return
+     */
+
+    public static String getDfsUrlPath(TPdmFileInfo tPdmFileInfo) {
+        return getDfsUrlPath(StringUtil.isNullOrEmpty(tPdmFileInfo.getDfsUrl()) ? tPdmFileInfo.getFtpUrl() : tPdmFileInfo.getDfsUrl());
+    }
+
+    @Deprecated
+    public static String getDfsUrlPath(String dfsUrl) {
+        if (StringUtils.isNotBlank(dfsUrl)) {
+            if (dfsUrl.indexOf("/") == 0) {
+                return dfsUrl;
+            } else {
+                return dfsUrl.substring(dfsUrl.indexOf("/") + 1);
+            }
+        }
+        return "";
+    }
+
+
+    /**
+     * 返回response.setContentType类型
+     *
+     * @param pathToFile
+     * @return
+     */
+    public static String getContentType(String pathToFile) {
+
+        Path path = Paths.get(pathToFile);
+        String contentType = null;
+        try {
+            contentType = Files.probeContentType(path);
+        } catch (IOException e) {
+
+            e.printStackTrace();
+        }
+        //System.out.println("File content type is : " + contentType);
+
+        if (contentType == null) {
+            String suffix = path.toString();
+            String str1 = suffix.substring(suffix.indexOf(".") + 1, suffix.length());
+            //ZIP的application/x-zip-compressed
+            if ("zip".equals(str1)) {
+                return "application/x-zip-compressed";
+            }
+            return "application/octet-stream"; //二进制流，不知道下载文件类型
+        } else {
+            return contentType;
+        }
+
+    }
+
+    // 移除小数点后面的0
+    public static String removeEndOfZero(String str) {
+        if (str == null) return null;
+        boolean flag = true;
+        while (str.length() > 1 && flag) {
+            if (str.contains(".") && (str.endsWith("0") || str.endsWith("."))) {
+                str = str.substring(0, str.length() - 1);
+            } else {
+                flag = false;
+            }
+        }
+        return str;
+    }
+
+    /**
+     * 获取文件名后缀
+     *
+     * @param fileName
+     * @return
+     * @author xiaojie.huang
+     */
+    public static String getFileExt(String fileName) {
+        if (fileName == null) {
+            return null;
+        }
+        String ext = "";
+        if (fileName.lastIndexOf(".") > -1) {
+            ext = fileName.substring(fileName.lastIndexOf(".") + 1, fileName.length());
+        }
+        return ext;
+    }
+
+    /**
+     * 获取文件名
+     *
+     * @param path
+     * @return
+     * @author xiaojie.huang
+     */
+    public static String getFileNameFromPath(String path) {
+        if (path == null) {
+            return null;
+        }
+        String fileName = "";
+        if (path.lastIndexOf("/") > -1) {
+            fileName = path.substring(path.lastIndexOf("/") + 1, path.length());
+        } else if (path.lastIndexOf("\\") > -1) {
+            fileName = path.substring(path.lastIndexOf("\\") + 1, path.length());
+        }
+        return fileName;
+    }
+
+    /**
+     * 判断字符是否是中文
+     *
+     * @param c 字符
+     * @return 是否是中文
+     */
+    public static boolean isChinese(char c) {
+        Character.UnicodeBlock ub = Character.UnicodeBlock.of(c);
+        if (ub == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS
+                || ub == Character.UnicodeBlock.CJK_COMPATIBILITY_IDEOGRAPHS
+                || ub == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_A
+                || ub == Character.UnicodeBlock.GENERAL_PUNCTUATION
+                || ub == Character.UnicodeBlock.CJK_SYMBOLS_AND_PUNCTUATION
+                || ub == Character.UnicodeBlock.HALFWIDTH_AND_FULLWIDTH_FORMS) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 判断字符串是
