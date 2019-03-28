@@ -1,0 +1,206 @@
+package com.moldyun.cloud.common.util;
+
+import com.moldyun.cloud.common.base.BaseResult;
+import com.moldyun.cloud.common.constant.CodeEnum;
+import com.moldyun.cloud.exception.CodeException;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.ObjectUtils;
+import org.springframework.util.StringUtils;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Collection;
+import java.util.Date;
+import java.util.Map;
+
+/**
+ * Created by xiaojie.huang on 2017/5/13.
+ */
+public class AssertUtil {
+
+
+    /**
+     * 字符串转换成日期,出错抛异常
+     * @param timeString
+     * @param formatString
+     * @param codeEnum
+     * @param param
+     */
+    public static void isStrIsDate(String timeString, String formatString, CodeEnum codeEnum, Object param) {
+        if(formatString==null||formatString.equals("")){
+            formatString = "yyyy-MM-dd HH:mm:ss";
+        }
+        SimpleDateFormat format = new SimpleDateFormat(formatString);
+        Date date = null;
+        try {
+            date = format.parse(timeString);
+        } catch (ParseException e) {
+            e.printStackTrace();
+            throw new CodeException(new BaseResult(codeEnum, param));
+        }
+    }
+
+    public static void isTrue(boolean expression, int code, String message) {
+        if (!expression) {
+            throw new CodeException(new BaseResult(code, message, null));
+        }
+    }
+
+    public static void isTrue(boolean expression, CodeEnum codeEnum) {
+        isTrue(expression, codeEnum, null);
+    }
+    /**
+     * 当表达式为false时，抛出异常
+     * @param expression
+     * @param codeEnum
+     * @param param
+     */
+    public static void isTrue(boolean expression, CodeEnum codeEnum, Object param) {
+        if (!expression) {
+            throw new CodeException(new BaseResult(codeEnum, param));
+        }
+    }
+
+    /**
+     * 当表达式为false时，抛出默认异常
+     * @param expression
+     */
+    public static void isTrue(boolean expression) {
+        isTrue(expression, CodeEnum.AssertError, null);
+    }
+
+    public static void isNull(Object object, CodeEnum codeEnum, Object param) {
+        if (object != null) {
+            throw new CodeException(new BaseResult(codeEnum, param));
+        }
+    }
+
+    public static void isNull(Object object) {
+        isNull(object, CodeEnum.AssertError, null);
+    }
+
+    public static void notNull(Object object, CodeEnum codeEnum, Object param) {
+        if (object == null) {
+            throw new CodeException(new BaseResult(codeEnum, param));
+        }
+    }
+
+    public static void notNull(Object object, CodeEnum codeEnum) {
+        if (object == null) {
+            throw new CodeException(new BaseResult(codeEnum, null));
+        }
+    }
+
+    public static void notNull(Object object, int code, String message) {
+        if (object == null) {
+            throw new CodeException(new BaseResult(code, message));
+        }
+    }
+
+    public static void notNull(Object object) {
+        notNull(object, CodeEnum.AssertError, null);
+    }
+
+    public static void hasLength(String text, CodeEnum codeEnum) {
+        hasLength(text, codeEnum, null);
+    }
+
+    public static void hasLength(String text, CodeEnum codeEnum, Object param) {
+        if (!StringUtils.hasLength(text)) {
+            throw new CodeException(new BaseResult(codeEnum, param));
+        }
+    }
+
+    public static void hasLength(String text) {
+        hasLength(text, CodeEnum.AssertError, null);
+    }
+
+    public static void hasText(String text, CodeEnum codeEnum, Object param) {
+        if (!StringUtils.hasText(text)) {
+            throw new CodeException(new BaseResult(codeEnum, param));
+        }
+    }
+
+    public static void hasText(String text) {
+        hasText(text, CodeEnum.AssertError, null);
+    }
+
+    public static void doesNotContain(String textToSearch, String substring, CodeEnum codeEnum, Object param) {
+        if (StringUtils.hasLength(textToSearch) && StringUtils.hasLength(substring) &&
+                textToSearch.contains(substring)) {
+            throw new CodeException(new BaseResult(codeEnum, param));
+        }
+    }
+
+    public static void doesNotContain(String textToSearch, String substring) {
+        doesNotContain(textToSearch, substring, CodeEnum.AssertError, null);
+    }
+
+
+    public static void notEmpty(Object[] array, CodeEnum codeEnum, Object param) {
+        if (ObjectUtils.isEmpty(array)) {
+            throw new CodeException(new BaseResult(codeEnum, param));
+        }
+    }
+
+    public static void notEmpty(Object[] array) {
+        notEmpty(array, CodeEnum.AssertError, null);
+    }
+
+    public static void noNullElements(Object[] array, CodeEnum codeEnum, Object param) {
+        if (array != null) {
+            for (Object element : array) {
+                if (element == null) {
+                    throw new CodeException(new BaseResult(codeEnum, param));
+                }
+            }
+        }
+    }
+
+    public static void noNullElements(Object[] array) {
+        noNullElements(array, CodeEnum.AssertError, null);
+    }
+
+    public static void notEmpty(Collection<?> collection, CodeEnum codeEnum, Object param) {
+        if (CollectionUtils.isEmpty(collection)) {
+            throw new CodeException(new BaseResult(codeEnum, param));
+        }
+    }
+
+    public static void notEmpty(Collection<?> collection, CodeEnum codeEnum) {
+        if (CollectionUtils.isEmpty(collection)) {
+            throw new CodeException(new BaseResult(codeEnum, null));
+        }
+    }
+
+    public static void notEmpty(Collection<?> collection, int code, String message) {
+        if (CollectionUtils.isEmpty(collection)) {
+            throw new CodeException(new BaseResult(code, message, null));
+        }
+    }
+
+    public static void notEmpty(Collection<?> collection) {
+        notEmpty(collection, CodeEnum.AssertError, null);
+    }
+
+    public static void notEmpty(Map<?, ?> map, CodeEnum codeEnum, Object param) {
+        if (CollectionUtils.isEmpty(map)) {
+            throw new CodeException(new BaseResult(codeEnum, param));
+        }
+    }
+
+    public static void notEmpty(Map<?, ?> map) {
+        notEmpty(map, CodeEnum.AssertError, null);
+    }
+
+    public static void isEmpty(Collection<?> collection, CodeEnum codeEnum, Object param) {
+        if (!CollectionUtils.isEmpty(collection)) {
+            throw new CodeException(new BaseResult(codeEnum, param));
+        }
+    }
+    public static void isEmpty(Collection<?> collection, CodeEnum codeEnum) {
+        if (!CollectionUtils.isEmpty(collection)) {
+            throw new CodeException(new BaseResult(codeEnum, null));
+        }
+    }
+}
