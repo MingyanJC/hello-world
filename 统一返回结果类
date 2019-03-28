@@ -1,0 +1,140 @@
+package com.moldyun.cloud.common.base;
+
+import com.moldyun.cloud.common.constant.CodeEnum;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 统一返回结果类<br>
+ * （作为【新增】【修改】【删除】的操作返回结果；<br>
+ *   使用其子类QueryResult作为【查询】的数据返回结果）<br>
+ * @author Created by fei.guo on 2017/4/18.
+ * Modified by jiaqi.geng on 2017/6/21: 添加空的构造方法和两个不带 Object 参数的构造方法；增加子类 QueryResult 用作【查询】的返回结果
+ */
+public class BaseResult implements Serializable {
+
+    // 状态码：1成功，其他为失败
+    private int code;
+
+    // 成功为success，其他为失败原因
+    private String message;
+
+    // 数据结果集
+    private Object data;
+
+    // 多语言业务消息替换
+    private List<String> param;
+
+
+    public static BaseResult SUCCESS() {
+        return new BaseResult(CodeEnum.SUCCESS, null);
+    }
+
+    public static BaseResult SUCCESS(Object data) {
+        return new BaseResult(CodeEnum.SUCCESS, data);
+    }
+
+    public static BaseResult newInstance(CodeEnum codeEnum) {
+        return new BaseResult(codeEnum, null);
+    }
+
+    public static BaseResult newInstance(CodeEnum codeEnum, Object data) {
+        return new BaseResult(codeEnum, data);
+    }
+
+    public void addParam(String... params) {
+        if (params == null) {
+            return;
+        }
+        if (this.param == null) {
+            this.param = new ArrayList<>();
+        }
+        this.param.addAll(Arrays.asList(params));
+    }
+
+    // 因添加子类QueryResult，必需添加此方法
+    protected BaseResult() {
+
+    }
+
+    public BaseResult(CodeEnum codeEnum, Object data) {
+        this.code = codeEnum.getCode();
+        this.message = codeEnum.getMessage();
+        this.data = data;
+    }
+
+    public BaseResult(CodeEnum codeEnum) {
+        this.code = codeEnum.getCode();
+        this.message = codeEnum.getMessage();
+    }
+
+    //支持多语言国际化后，该方法的 message 信息已被丢弃（因为无法支持多语言）
+    //请将使用该方法的代码，改为使用： public BaseResult(CodeEnum codeEnum, Object data)， 同时在CodeEnum中新增一个枚举值
+    @Deprecated
+    public BaseResult(int code, String message, Object data) {
+        this.code = code;
+        this.message = message;
+        this.data = data;
+    }
+
+    //支持多语言国际化后，该方法的 message 信息已被丢弃（因为无法支持多语言）
+    //请将使用该方法的代码，改为使用： public BaseResult(CodeEnum codeEnum)， 同时在CodeEnum中新增一个枚举值
+    @Deprecated
+    public BaseResult(int code, String message) {
+        this.code = code;
+        this.message = message;
+    }
+
+    public int getCode() {
+        return code;
+    }
+
+    public void setCode(int code) {
+        this.code = code;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
+    }
+
+    public Object getData() {
+        return data;
+    }
+
+    public void setData(Object data) {
+        this.data = data;
+    }
+
+    public List<String> getParam() {
+        return param;
+    }
+
+    public void setParam(List<String> param) {
+        this.param = param;
+    }
+
+    public void updateBaseResult(CodeEnum codeEnum) {
+        this.code = codeEnum.getCode();
+        this.message = codeEnum.getMessage();
+    }
+
+    public void updateBaseResult(CodeEnum codeEnum, String data) {
+        this.updateBaseResult(codeEnum);
+        this.data = data;
+    }
+
+    public void updateBaseResult(BaseResult baseResult) {
+        this.code = baseResult.getCode();
+        this.message = baseResult.getMessage();
+        this.data = baseResult.getData();
+    }
+
+}
