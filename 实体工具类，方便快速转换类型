@@ -1,0 +1,84 @@
+public class BeanUtil {
+
+    /**
+     * 实例化
+     * @param clazz
+     * @param <T>
+     * @return
+     * @author xiaojie.huang
+     */
+    private static <T> T newInstance(Class<T> clazz) {
+        T t = null;
+        try {
+            t = clazz.newInstance();
+        } catch (InstantiationException e) {
+            e.printStackTrace();
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        }
+        return t;
+    }
+
+    /**
+     * 复制实体
+     * @param s
+     * @param targetClazz
+     * @param <T>
+     * @param <S>
+     * @return
+     * @author xiaojie.huang
+     */
+    public static <T, S> T copyBean(S s, Class<T> targetClazz) {
+        if (s == null) {
+            return null;
+        }
+        T t = BeanUtil.newInstance(targetClazz);
+        BeanUtils.copyProperties(s, t);
+        return t;
+    }
+
+    /**
+     * 复制List
+     * @param sourceList
+     * @param targetClazz
+     * @param <T>
+     * @param <S>
+     * @return
+     * @author xiaojie.huang
+     */
+    public static <T, S> List<T> copyList(List<S> sourceList, Class<T> targetClazz) {
+        if (sourceList == null) {
+            return null;
+        }
+        List<T> targetList = new ArrayList<>();
+        for (S s : sourceList) {
+            T t = BeanUtil.newInstance(targetClazz);
+            BeanUtils.copyProperties(s, t);
+            targetList.add(t);
+        }
+        return targetList;
+    }
+
+    /**
+     * 复制Map
+     * @param sourceMap
+     * @param targetClazz
+     * @param <T>
+     * @param <S>
+     * @param <K>
+     * @return
+     * @author xiaojie.huang
+     */
+    public static <T, S, K> Map<K, T> copyMap(Map<K, S> sourceMap, Class<T> targetClazz) {
+        if (sourceMap == null) {
+            return null;
+        }
+        Map<K, T> targetMap = new HashMap<>();
+        for (K k : sourceMap.keySet()) {
+            T t = BeanUtil.newInstance(targetClazz);
+            BeanUtils.copyProperties(sourceMap.get(k), t);
+            targetMap.put(k, t);
+        }
+        return targetMap;
+    }
+}
