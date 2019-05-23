@@ -1,0 +1,78 @@
+;appId=moldyun-appId
+#define MyAppId "${appId}"
+;appName
+#define MyAppName "${appName}"
+;appVersion
+#define MyAppVersion "${versionNo}"
+#define MyAppPublisher "sales@moldbao.com"
+#define MyAppURL "http://www.moldyun.com"
+#define MyPkgmk "${appOutputDir}"
+#define MyInstallationPath "${appInstallationPath}"
+#define MyFileSource "${appFileSource}"
+#define MyField "模德宝软件"
+
+
+
+[Setup]
+; 注: AppId的值为单独标识该应用程序。
+; 不要为其他安装程序使用相同的AppId值。
+; (生成新的GUID，点击 工具|在IDE中生成GUID。)
+AppId={#MyAppId}
+;程序名
+AppName={#MyAppName}
+;版本号
+AppVersion={#MyAppVersion}
+;发布者名
+AppPublisher={#MyAppPublisher}
+AppPublisherURL={#MyAppURL}
+AppSupportURL={#MyAppURL}
+AppUpdatesURL={#MyAppURL}
+;默认安装目录
+DefaultDirName={#MyInstallationPath}
+;默认开始菜单名
+DefaultGroupName={#MyField}
+;输出文件夹
+OutputDir={#MyPkgmk}
+;输出文件名
+OutputBaseFilename={#MyAppName}setup
+;备注版本信息
+VersionInfoCompany=http://www.moldyun.com
+VersionInfoDescription=moldyun
+VersionInfoCopyright=Copyright ? 2018 粤ICP备12083389号-6 深圳模德宝科技有限公司 | MDB
+;压缩相关
+Compression=lzma
+SolidCompression=yes
+;可以让用户忽略选择语言相关
+ShowLanguageDialog = yes
+
+[Languages]
+;中文简体
+Name: chinesesimp; MessagesFile: "compiler:Default.isl"
+
+[Tasks]
+;createDesktopIcon=创建桌面快捷方式(&D)
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkablealone
+
+;文件安装
+[Files]
+;多语言安装环境设置    公共参数Languages 来设置
+Source: "{#MyFileSource}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Icons]
+//开始菜单卸载程序
+Name: {group}\{#MyAppName}\卸载 {#MyAppName}; Filename:{uninstallexe};
+${shortcut}
+
+;更改显示在程序中显示的消息文本
+[Messages]
+BeveledLabel=模德宝科技
+
+;卸载对话框说明
+ConfirmUninstall=您真的想要从电脑中卸载{#MyAppName}吗?%n%n按 [是] 则完全删除 %1 以及它的所有组件;%n按 [否]则让软件继续留在您的电脑上
+
+
+
+
+
+
+
