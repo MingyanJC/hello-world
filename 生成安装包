@@ -1,0 +1,448 @@
+package com.moldyun.cloud.proxy.rpc.service.impl;
+
+import com.moldyun.cloud.bms.rpc.api.BmsCommPubService;
+import com.moldyun.cloud.bms.rpc.api.BmsSysComputerPubService;
+import com.moldyun.cloud.bms.vo.InstallationPackageVO;
+import com.moldyun.cloud.bms.vo.TPdmFile;
+import com.moldyun.cloud.bms.vo.TPdmFileInfo;
+import com.moldyun.cloud.bms.vo.TSysTenantServerApp;
+import com.moldyun.cloud.common.constant.*;
+import com.moldyun.cloud.common.context.BaseContextValue;
+import com.moldyun.cloud.common.util.*;
+import com.moldyun.cloud.dfs.FileServerService;
+import com.moldyun.cloud.exception.BusinessException;
+import com.moldyun.cloud.fastdfs.model.StorePath;
+import com.moldyun.cloud.fastdfs.protocol.storage.callback.DownloadByteArray;
+import com.moldyun.cloud.proxy.rpc.api.PackagingService;
+import org.I0Itec.zkclient.Gateway;
+import org.apache.tools.zip.ZipEntry;
+import org.apache.tools.zip.ZipFile;
+import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
+
+import java.io.*;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+
+public class PackagingServiceImpl implements PackagingService {
+
+    final static Logger logger = LoggerFactory.getLogger(PackagingServiceImpl.class);
+
+    //app模板下载后存放的路径
+    private String appTemplatePath;
+    //app模板解压后的文件和生成的iss文件的存放路径
+    private String appDownloadPath;
+    //存放临时文件的路径
+    private String appTempPath;
+    //输出文件夹
+    private String appOutputDir;
+    //用户默认安装路径
+    private String appInstallationPath;
+
+    //EXE运行的超时时长（秒）（配置文件里配置）
+    private int timeoutSeconds;
+    //打包模板文件所在文件夹
+    private String innoSetupTemplateFileDir;
+
+    //返回App替换后模板文件所在目录
+    private static final int appFileFlag = 1;
+    //返回App描述文件路径
+    private static final int appDecFlag = 2;
+
+    @Autowired
+    BmsCommPubService bmsCommPubService;
+
+    @Autowired
+    BmsSysComputerPubService bmsSysComputerPubService;
+
+    @Autowired
+    FileServerService fileServerService;
+
+    @Override
+    @Transactional
+    public Integer generateInstallationPackages(BaseContextValue baseContextValue, InstallationPackageVO installationPackageVO) {
+        logger.info("-------------generateInstallationPackages 调用生成安装包方法----------------------");
+        //安装包模板文件Id不能为空
+        if (installationPackageVO == null || installationPackageVO.getVersionFileId() == null || installationPackageVO.getVersionFileId() == -1L) {
+            logger.info("-------------安装包模板文件Id为空返回 0 ----------------------");
+            return NumberConst.ZERO_INT;
+        }
+        //获取安装包模板
+        TPdmFileInfo tPdmFileInfo = getPdmFileInfo(baseContextValue, installationPackageVO);
+        //解析文件模板内容
+        String appDescFilePath = parseFileTemplate(tPdmFileInfo, installationPackageVO, appDecFlag);
+        //获取描述文件内容
+        List<String[]> items = getAppDescFileContent(appDescFilePath);
+
+        String path = "";
+        //待替换到.iss模板中的内容
+        Map<String, Object> toBeReplaceValueMap = new HashMap<>();
+        //AppId的值为单独标识该应用程序
+        toBeReplaceValueMap.put("appId", "moldYun" + "_" + installationPackageVO.getAppId() + "");
+        //应用程序名称
+        toBeReplaceValueMap.put("appName", installationPackageVO.getAppName());
+        //版本号
+        toBeReplaceValueMap.put("versionNo", installationPackageVO.getVersionNo());
+        //输出文件夹
+        toBeReplaceValueMap.put("appOutputDir", appOutputDir + File.separator + installationPackageVO.getImageUrl() + File.separator + installationPackageVO.getAppDownloadId());
+        //用户默认安装路径
+        toBeReplaceValueMap.put("appInstallationPath", appInstallationPath + File.separator + installationPackageVO.getImageUrl());
+        //源文件
+        if (tPdmFileInfo.getFileName() != null && tPdmFileInfo.getFileName().endsWith(".zip")) {
+            path = tPdmFileInfo.getFileName().replaceAll(".zip", "");
+        }
+        toBeReplaceValueMap.put("appFileSource", appDownloadPath + File.separator + installationPackageVO.getImageUrl() + File.separator + installationPackageVO.getAppDownloadId() + File.separator + path);
+
+        //根据描述文件内容生成快捷方式相关iss文件内容
+        StringBuffer stringBuffer = new StringBuffer();
+        if (!CollectionUtils.isEmpty(items)) {
+            for (String[] value : items) {
+                //key=文件名,是否创建开始菜单快捷方式1是0否,是否创建桌面快捷方式1是0否,快捷方式名称
+                if (value != null && value.length == 4) {
+                    if (value[1].equals("1")) {
+                        stringBuffer.append("Name: \"{group}\\{#MyAppName}\\");
+                        stringBuffer.append(value[3]);
+                        stringBuffer.append("\"; Filename: \"{app}\\");
+                        stringBuffer.append(value[0]);
+                        stringBuffer.append("\"\r\n");
+                    }
+                    if (value[2].equals("1")) {
+                        stringBuffer.append("Name: \"{commondesktop}\\");
+                        stringBuffer.append(value[3]);
+                        stringBuffer.append("\"; Filename: \"{app}\\");
+                        stringBuffer.append(value[0]);
+                        stringBuffer.append("\"; Tasks: desktopicon\r\n");
+                    }
+                }
+            }
+        }
+        String shortcutConfig = stringBuffer.toString();
+        toBeReplaceValueMap.put("shortcut", shortcutConfig);
+
+        //设置参数
+        //使用配置参数对模板进行标签替换，生成实际要使用的配置文件
+        String targetPath = appTempPath + File.separator + installationPackageVO.getAppDownloadId() + ".iss";
+        try {
+
+            FreemakerUtils.generateTemplate(innoSetupTemplateFileDir, targetPath, "innoSetupTemplate.iss", toBeReplaceValueMap, "GBK");
+        } catch (Exception e) {
+            logger.info("-----.iss模板替换参数异常----" + e.getMessage());
+            throw new BusinessException(".iss模板替换参数异常");
+        }
+
+        Runtime runtime = Runtime.getRuntime();
+        try {
+            logger.info("----- 准备生成安装包exe文件 ----");
+            //睡眠10秒，减少文件访问冲突的可能（上一次生成的文件还未完成上传，又生成新的文件）
+            TimeUnit.SECONDS.sleep(10);//秒
+            
+            logger.info("----- 调用compile.bat(BEGIN) ----");
+            ProcessUtil.execute(timeoutSeconds * 1000, innoSetupTemplateFileDir + File.separator + "compile.bat", targetPath);
+            logger.info("----- 调用compile.bat(END) ----");
+        } catch (Exception e) {
+            logger.info("-----cmd命令运行编译iss文件异常----" + e.getMessage());
+            throw new BusinessException("cmd命令运行编译iss文件异常");
+        }
+
+
+        //安装包路径
+        String exePath = appOutputDir + File.separator + installationPackageVO.getImageUrl() + File.separator + installationPackageVO.getAppDownloadId() +
+                File.separator + installationPackageVO.getAppName() + "setup.exe";
+        File exeFile = new File(exePath);
+        String fileName = "";       // 文件名称
+        int fileSize = 0;       // 文件大小
+        String fileNameExt = "";    // 文件后缀
+        try {
+            FileInputStream fileInputStream = new FileInputStream(exeFile);
+            fileName = exeFile.getName();
+            fileSize = fileInputStream.available();
+            fileNameExt = UploadUtil.findFileNameExt(fileName);
+            if ("exe".equals(fileNameExt)) {
+                // 保存文件到服务器
+                logger.info("----- 上传文件"+fileName+" (BEGIN) ----");
+                StorePath storePath = fileServerService.uploadFile(fileInputStream, fileInputStream.available(), fileNameExt);
+                logger.info("----- 上传文件"+fileName+" (END) ----");
+                TPdmFile pdmFile = GenerateEntityUtil.generatePdmFile(fileName, fileSize, storePath.getFullPath(), installationPackageVO.getAppDownloadId(), installationPackageVO.getAppDownloadId(), FileTypeEnum.APP_INSTALLATION_PACKAGE_EXE_FILE, FileDepositEnum.DFS.getType());
+                bmsCommPubService.addPdmFile(baseContextValue, pdmFile);
+            }
+        } catch (Exception e) {
+            logger.info("-------------保存文件到服务器异常 ----------------------");
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    /**
+     * 生成网关自动升级包并上传文件服务器
+     * @param baseContextValue
+     * @param installationPackageVO
+     */
+    @Override
+    @Transactional
+    public Integer generatingGatewayUpgradePacket(BaseContextValue baseContextValue, InstallationPackageVO installationPackageVO) {
+        logger.info("-------------generatingGatewayUpgradePacket 生成网关升级包----------------------");
+        //获取安装包模板
+        TPdmFileInfo tPdmFileInfo = getPdmFileInfo(baseContextValue, installationPackageVO);
+        //解析文件模板内容
+        String appFilePath = parseFileTemplate(tPdmFileInfo, installationPackageVO, appFileFlag);
+        StringBuffer stringBuffer = new StringBuffer();
+        stringBuffer.append(appFilePath);
+        stringBuffer.append(File.separator);
+        stringBuffer.append(tPdmFileInfo.getFileName().substring(0,tPdmFileInfo.getFileName().indexOf(".zip")));
+        String filePath = stringBuffer.toString();
+        stringBuffer.append(".zip");
+        String zipFileName = stringBuffer.toString();
+        compressedFile(filePath,zipFileName);
+        File zipFile = new File(zipFileName);
+        String fileName = "";       // 文件名称
+        int fileSize = 0;       // 文件大小
+        String fileNameExt = "";    // 文件后缀
+        try {
+            FileInputStream fileInputStream = new FileInputStream(zipFile);
+            fileName = zipFile.getName();
+            fileSize = fileInputStream.available();
+            fileNameExt = UploadUtil.findFileNameExt(fileName);
+            if ("zip".equals(fileNameExt)) {
+                // 保存文件到服务器
+                StorePath storePath = fileServerService.uploadFile(fileInputStream, fileInputStream.available(), fileNameExt);
+                TPdmFile pdmFile = GenerateEntityUtil.generatePdmFile(fileName, fileSize, storePath.getFullPath(), installationPackageVO.getAppDownloadId(), installationPackageVO.getAppDownloadId(), FileTypeEnum.APP_UPGRADE_PACK_PACKAGE_ZIP_FILE, FileDepositEnum.DFS.getType());
+                bmsCommPubService.addPdmFile(baseContextValue, pdmFile);
+                //更新serverApp,达到通知自动升级包已经成功上传的目的
+                if (installationPackageVO.getAppId().equals(AppEnum.网关.getAppId())) {
+                    TSysTenantServerApp tSysTenantServerApp = bmsSysComputerPubService.getTenantServerAppDetail(installationPackageVO.getAppDownloadId());
+                    bmsSysComputerPubService.editTenantServerApp(tSysTenantServerApp);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    /**
+     * 获取运维后台上传的App安装模板
+     *
+     * @param baseContextValue
+     * @param installationPackageVO
+     * @return
+     */
+    private TPdmFileInfo getPdmFileInfo(BaseContextValue baseContextValue, InstallationPackageVO installationPackageVO) {
+        logger.info("-------------getPdmFileInfo 获取运维后台上传的App安装模板 ----------------------");
+        //租户ID
+        Long tenantId = baseContextValue.getTenant_Id();
+        //运维后台上传的文件租户ID默认10L
+        baseContextValue.setTenant_Id(10L);
+        List<TPdmFileInfo> fileInfoList = bmsCommPubService.getPdmFileInfoByRefidAndTypeAndExt(baseContextValue, installationPackageVO.getVersionFileId(), FileTypeEnum.APP_PACKAGE_TEMPLATE_ZIP_FILE.getCode(), "zip");
+        baseContextValue.setTenant_Id(tenantId);
+
+        //判断是否存在安装包模板文件
+        AssertUtil.isTrue(!CollectionUtils.isEmpty(fileInfoList), CodeEnum.BmsNotMatchedToInstallationPackageTemplateFile);
+        //判断是否唯一存在安装包模板文件
+        AssertUtil.isTrue(fileInfoList.size() == 1, CodeEnum.BmsMoreThanOneInstallationPackageTemplateFileExists);
+
+        //安装包模板文件是否包含配置参数项标识
+        return fileInfoList.get(0);
+    }
+
+    /**
+     * 解析获取到的模板,解压模板文件到指定位置，并替换mdbtpl文件内容,根据参数返回对应路径:1:解压替换后的文件目录,2:描述文件路径
+     *
+     * @param tPdmFileInfo
+     * @param installationPackageVO
+     * @return
+     */
+    private String parseFileTemplate(TPdmFileInfo tPdmFileInfo, InstallationPackageVO installationPackageVO, Integer flag) {
+        logger.info("-------------parseFileTemplate 解析获取到的模板,解压模板文件到指定位置，并替换mdbtpl文件内容 ----------------------");
+        //根据ID查询安装包下载项详情获取表中已存在的配置参数
+        Map<String, Object> paramDetail = new HashMap<>();
+        if (StringUtil.isNotNullOrEmpty(installationPackageVO.getConfigParas())) {
+            //得到配置参数项列表
+            JSONObject configParasJson = new JSONObject(installationPackageVO.getConfigParas());
+            Iterator it = configParasJson.keys();
+            while (it.hasNext()) {
+                String key = (String) it.next();
+                Object value = configParasJson.get(key);
+                paramDetail.put(key, value);
+            }
+        }
+        paramDetail.put("_tenantId_", installationPackageVO.getTenantId());
+        //将其它来源参数合并到 安装包下载项的参数map中去
+        if (installationPackageVO.getParamMap() != null && installationPackageVO.getParamMap().size() > 0) {
+            paramDetail.putAll(installationPackageVO.getParamMap());
+        }
+
+        String dfsUrl = tPdmFileInfo.getDfsUrl();
+        if (StringUtil.isNullOrEmpty(dfsUrl)) {
+            dfsUrl = tPdmFileInfo.getFtpUrl();
+        }
+        logger.info(">>>>>>>>>>>>>> dfsUrl:{}", dfsUrl);
+        DownloadByteArray downloadByteArray = new DownloadByteArray();
+        ZipFile zip = null;
+        File file = null;
+        InputStream is = null;
+        FileOutputStream fos = null;
+        FileOutputStream out = null;
+        BufferedOutputStream bufferedOutputStream = null;
+        BufferedOutputStream bos = null;
+        File zipFile = null;
+        //app模板文件夹路径名
+        String templatePathName = appTemplatePath + File.separator + tPdmFileInfo.getFileId();
+        //app模板解压后文件夹路径名
+        String downloadPathName = appDownloadPath + File.separator + installationPackageVO.getImageUrl() +
+                File.separator + installationPackageVO.getAppDownloadId();
+        //文件路径名
+        String filePathName = templatePathName + File.separator + tPdmFileInfo.getFileName();
+
+        //应用程序描述文件路径
+        String appDescFilePath = null;
+        try {
+            File outFile = new File(templatePathName);
+            //判断文件夹是否存在，不存在则创建
+            if (!outFile.exists() || !outFile.isDirectory()) {
+                outFile.mkdirs();
+            }
+            zipFile = new File(filePathName);
+            //文件不存在则从文件服务器下载
+            if (!zipFile.exists()) {
+                //从文件服务器得到byte[]
+                byte[] fileContext = fileServerService.downloadFile(StringUtil.getDfsUrlGroup(tPdmFileInfo), StringUtil.getDfsUrlPath(tPdmFileInfo), downloadByteArray);
+
+                out = new FileOutputStream(filePathName);
+                bufferedOutputStream = new BufferedOutputStream(out);
+                bufferedOutputStream.write(fileContext);
+                bufferedOutputStream.close();
+                out.close();
+                zipFile = new File(filePathName);
+            }
+        } catch (Exception e) {
+            logger.info("-----generateInstallationPackages：App模板下载异常----" + e.getMessage());
+            throw new BusinessException("App模板下载异常");
+        } finally {
+            try {
+                if (bufferedOutputStream != null) {
+                    bufferedOutputStream.close();
+                }
+                if (out != null) {
+                    out.close();
+                }
+            } catch (Exception e) {
+                logger.info("-----generateInstallationPackages: App模板下载流关闭异常----" + e.getMessage());
+            }
+        }
+
+        try {
+            //将ZIP文件解压到指定位置
+            zip = new ZipFile(zipFile, "GBK");
+            Enumeration<?> entries = zip.getEntries();
+            int count = -1;
+            while (entries.hasMoreElements()) {
+                byte buf[] = new byte[2048];
+
+                ZipEntry entry = (ZipEntry) entries.nextElement();
+
+                String filename = entry.getName();
+                boolean ismkdir = false;
+                if (filename.lastIndexOf("/") != -1) { //检查此文件是否带有文件夹
+                    ismkdir = true;
+                }
+                //找出应用程序描述文件的路径
+                if (filename.contains("AppDesc.properties")) {
+                    appDescFilePath = downloadPathName + File.separator + filename;
+                }
+                filename = downloadPathName + File.separator + filename;
+
+                if (entry.isDirectory()) { //如果是文件夹先创建
+                    file = new File(filename);
+                    file.mkdirs();
+                    continue;
+                }
+                file = new File(filename);
+                if (!file.exists()) { //如果是目录先创建
+                    if (ismkdir) {
+                        new File(filename.substring(0, filename.lastIndexOf("/"))).mkdirs(); //目录先创建
+                    }
+                }
+                file.createNewFile(); //创建文件
+
+                is = zip.getInputStream(entry);
+                fos = new FileOutputStream(file);
+                bos = new BufferedOutputStream(fos, 2048);
+
+                while ((count = is.read(buf)) > -1) {
+                    bos.write(buf, 0, count);
+                }
+                bos.flush();
+                bos.close();
+                fos.close();
+                is.close();
+            }
+            zip.close();
+        } catch (Exception e) {
+            logger.info("-----generateInstallationPackages：App模板解压异常----" + e.getMessage());
+            throw new BusinessException("App模板解压异常");
+        } finally {
+            try {
+                if (bos != null) {
+                    bos.close();
+                }
+                if (fos != null) {
+                    fos.close();
+                }
+                if (is != null) {
+                    is.close();
+                }
+                if (zip != null) {
+                    zip.close();
+                }
+            } catch (Exception e) {
+                logger.info("-----generateInstallationPackages: App模板压缩流关闭异常----" + e.getMessage());
+            }
+        }
+
+        //创建File对象,指向ZIP解压后的存放的文件夹
+        FileWriter fileWriter = null;
+        try {
+            File theFile = new File(downloadPathName);
+            List<String> filePaths = new ArrayList<>();
+            List<String> filePathList = FileUtils.getAllFilePaths(theFile, filePaths);
+            for (String filePath : filePathList) {
+                if (filePath.endsWith(".mdbtpl")) {
+                    //使用配置参数对模板进行标签替换，生成实际要使用的配置文件
+                    File file1 = new File(filePath);
+                    FreemakerUtils.generateTemplate(file1.getParent(), filePath.replaceAll(".mdbtpl", ""), file1.getName(), paramDetail, "UTF-8");
+                    //删除.mdbtpl文件
+                    FileUtils.deleteFile(filePath);
+                }
+            }
+        } catch (Exception e) {
+            logger.info("-----.mdbtpl模板替换参数异常----" + e.getMessage());
+            throw new BusinessException(".mdbtpl模板替换参数异常");
+        }
+
+        if (flag.equals(appFileFlag)) {
+            return downloadPathName;
+        } else {
+            return appDescFilePath;
+        }
+    }
+
+    /**
+     * 获取App描述文件内容
+     *
+     * @param appDescFilePath
+     * @return
+     */
+    private List<String[]> getAppDescFileContent(String appDescFilePath) {
+        List<String[]> items = new ArrayList<>();
+        Properties prop = new Properties();
+        InputStream in = null;
+        try {
+            if (!StringUtil.isNullOrEmpty(appDescFilePath)) {
+                // 使用InPutStream流读取propert
